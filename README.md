@@ -1,6 +1,6 @@
 # Supplementary Code for: Spatio-Temporal Additive Regression Model Selection for Urban Water Demand
 
-This repository provides code and simulated data for the models in the 2018 SERR paper "Spatio-Temporal Additive Regression Model Selection for Urban Water Demand." 
+This repository provides code and simulated data for the models in the 2019 SERR paper "Spatio-Temporal Additive Regression Model Selection for Urban Water Demand." 
 
 ## Getting Started
 

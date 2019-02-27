@@ -1,21 +1,22 @@
 rm(list=ls())
 # AA = 1 #for HiperGator (AA = seed)
-# BB = 1 #BB = sample size
+# BB = 2 #BB = sample size
 # CC = 3 #CC = SNR
 set.seed(AA)
 
-# setwd("C:/Users/Hunter/Dropbox/Hunter/Research/BGL_Selection_Study/The_Paper_revision_2/")
+#setwd("C:/Users/Hunter/Dropbox/Hunter/Research/BGL_Selection_Study/The_revised_code_and_work/")
 setwd("/ufrc/bliznyuk/hmerrill/Bayes_GAM_Select")
 
 library(mgcv) #for gam
 library(Rcpp) #Rcpp
 library(RcppArmadillo) #better matrix algebra
-library(spikeSlabGAM)
+# library(spikeSlabGAM)
+library(spikeSlabGAM, lib.loc = "/ufrc/bliznyuk/hmerrill/Bayes_GAM_Select/R/")
 
 ##### Simulation parameters
-n.true = 24 #number of true predictors
+n.true = 6 #number of true predictors
 n.sim = 250*(2^(BB-1)) #number of observations
-n.predictors = 100 #number of total preds
+n.predictors = 12 #number of total preds
 num.knots.sim = 10 #number of knots for simulation
 logical.interactions = FALSE #should interactions be considered?
 rho.par = BB #AR1 parameter
@@ -31,24 +32,14 @@ SNR = CC #overall signal to noise ratio, Gaussian
 #   rho = 0
 # }
 
-n.burnin = 25000
-n.samples = 5000 + n.burnin
-thin = 10
-# n.burnin = 1000; n.samples = 2000; thin = 1
-keepers = seq(from=n.burnin+1, to= n.samples, by=thin) #burnin and thin the chain
+rho = 0.75
+rho2 = -0.5
 
-# 
-# if(n.sim == 250){
-#   n.burnin = 50000
-#   n.samples = 50000 + n.burnin
-#   thin = 10
-#   keepers = seq(from=n.burnin+1, to= n.samples, by=thin) #burnin and thin the chain
-# } else {
-#   n.burnin = 25000
-#   n.samples = 25000 + n.burnin
-#   thin = 10
-#   keepers = seq(from=n.burnin+1, to= n.samples, by=thin) #burnin and thin the chain
-# }
+##### Gibbs sampler parameters
+n.burnin = 50000
+n.samples = 50000 + n.burnin
+thin = 10
+keepers = seq(from=n.burnin+1, to= n.samples, by=thin) #burnin and thin the chain
 
 ##################
 ### Data Setup ###
@@ -57,7 +48,7 @@ keepers = seq(from=n.burnin+1, to= n.samples, by=thin) #burnin and thin the chai
 # sourceCpp("20160901_BGL_SS_MCMC_1lam.cpp") #get AR(1) version
 # sourceCpp("M_BGL_SS_AR1_MCMC_wip_norho.cpp") #get AR(1) version
 # sourceCpp("M_BGL_SS_MCMC_wip.cpp")
-sourceCpp("SRC/BGL_GAM_MCMC_ST.cpp")
+sourceCpp("SRC/BGL_GAM_MCMC_AR2.cpp")
 #source("C:/Users/Hunter/Dropbox/Hunter/Research/My_R_Packages/hunterr/R/Basis_expansion_function.R") #basis expansion
 source("SRC/Basis_expansion_function_new.R") #basis expansion
 # source("Basis_expansion_function_2.R") #basis expansion
@@ -114,13 +105,9 @@ trends[,4] = BCO.dat[,5]^11*(10*(1-BCO.dat[,5]))^6 + 10*(10*BCO.dat[,5])^3*(1-BC
 trends[,5] = (BCO.dat[,6]^3 + sin(pi*BCO.dat[,6]^3))
 trends[,6] = cos(2*pi*BCO.dat[,7]) + sin(pi*BCO.dat[,7])
 
-for(i in 1:6){
+for(i in 1:n.true){
   trends[,i] = (trends[,i] - min(trends[,i]))/diff(range(trends[,i]))
 }
-
-trends[,7:12] <- trends[,1:6]/2
-trends[,13:18] <- trends[,1:6]/4
-trends[,19:24] <- trends[,1:6]/10
 
 # par(mfrow=c(2,3), mar=c(3,3,1,1), mgp=c(2,1,0))
 # for(i in 1:n.true){
@@ -146,33 +133,15 @@ if(SNR == 3){
 #   sd.noise = .4 #SNR = 1/4
 # }
 
-# x.s = BCO.dat$X2
-# z.s = BCO.dat$X3
-x.s = rep(sort(runif(n.sim/10)), 10)
-z.s = rep(runif(n.sim/10), 10)
-
-Dist = as.matrix(dist(cbind(x.s, z.s)))
-# cstr <- corExp(.03,form = ~x.s+z.s)  
-# cstr <- Initialize(cstr,data.frame(x=z.s,z=z.s))
-# V <- corMatrix(cstr) ## correlation matrix for data
-V <- exp(-Dist/0.1)*exp(as.matrix(dist(rep(1:(10), each = n.sim/10)))*log(.75))
-Cv <- chol(V)*sd.noise
-
-# plot(BCO.dat$X2, BCO.dat$X3, pch = 16,
-#      col = fields::tim.colors(n.sim)[rank(trends[,2] + trends[,3])])
-# plot(x.s, z.s, pch = 16,
-#      col = fields::tim.colors(n.sim)[rank(t(Cv)%*%rnorm(n.sim))])
-# plot(BCO.dat$X2, BCO.dat$X3, pch = 16,
-#      col = fields::tim.colors(n.sim)[rank(t(Cv)%*%rnorm(n.sim) + trends[,2] + trends[,3])])
-
-# pres.mat = matrix(0, nrow=n.sim, ncol=n.sim)
-# diag(pres.mat) = c(1, rep(1+rho^2, n.sim-2) ,1)
-# for(i in 1:(n.sim-1)){
-#   pres.mat[i,i+1] = -rho
-#   pres.mat[i+1,i] = -rho
-# }
-# cor.mat = solve(pres.mat)
-# cov.mat = (sd.noise^2)*cor.mat
+half.mat = matrix(0, nrow=n.sim, ncol=n.sim)
+diag(half.mat) = 1
+for(i in 1:(n.sim-1)){
+  half.mat[i+1,i] = -rho
+  if(i <= (n.sim - 2)) half.mat[i+2,i] = -rho2
+}
+pres.mat <- half.mat %*% t(half.mat)
+cor.mat = solve(pres.mat)
+cov.mat = (sd.noise^2)*cor.mat
 
 # BCO.dat$Y.norm = 0
 # BCO.dat$Y.norm[1] = mean.trend[1] + rnorm(1, 0, sd=sd.noise)
@@ -180,7 +149,7 @@ Cv <- chol(V)*sd.noise
 #   BCO.dat$Y.norm[i] = mean.trend[i] + rho*(BCO.dat$Y.norm[i-1] - mean.trend[i-1]) + rnorm(1, 0, sd=sd.noise)
 # }
 
-BCO.dat$Y.norm = c(mean.trend + t(Cv)%*%rnorm(n.sim))
+BCO.dat$Y.norm = c(mean.trend + rnorm(n.sim)%*%chol(cov.mat))
 # BCO.dat$Y.norm = c(mean.trend + sd.noise*rnorm(n.sim))
 ############################################################################
 
@@ -197,7 +166,7 @@ sig2.gamma = .1
 pi0.a = 1
 pi0.b = 1
 lamsep = FALSE
-rhomethod = "empirical" #depricated
+rhomethod = "empirical"
 
 MCMC_Results_Rcpp = M_BGL_SS_AR1_MCMC(C_full = C.full, #design matrix
                                       Y = Y, #data
@@ -209,9 +178,6 @@ MCMC_Results_Rcpp = M_BGL_SS_AR1_MCMC(C_full = C.full, #design matrix
                                       n_samples = n.samples, #how many iterations
                                       sig2_beta = 1e6,
                                       print_step = 100,
-                                      tune_rho = 0.1,
-                                      DistS = Dist,
-                                      DistT = as.matrix(dist(rep(1:(n.sim/10), each = 10))),
                                       rhomethod = rhomethod,
                                       lamsep = lamsep) 
 
@@ -223,7 +189,8 @@ sig2.samples.C = MCMC_Results_Rcpp$sig2.samples
 tau2.samples.C = MCMC_Results_Rcpp$tau2.samples
 pi0.samples.C = MCMC_Results_Rcpp$pi0.samples
 # lam.samples.C = MCMC_Results_Rcpp$lam.samples
-# rho.samples.C = MCMC_Results_Rcpp$rho.samples
+rho.samples.C = MCMC_Results_Rcpp$rho.samples
+rho2.samples.C = MCMC_Results_Rcpp$rho2.samples
 
 true.model.ind = rep(0, length(unique(partition)))
 true.model.ind[(1:n.true+1)] = 1
@@ -256,7 +223,7 @@ which.true = unique(c(which.true, which.true2))
 # plot(rho.samples.C[keepers][which.MTM], type="l")
 # plot(rho.samples.C[keepers][which.true], type="l")
 
-w.est.Gaus = apply(w.samples.C[,keepers], 1, median)
+w.est.Gaus = apply(w.samples.C[,keepers][,which.MTM], 1, mean)
 
 # par(mfrow=c(1,1), mar=c(3,3,1,1), mgp = c(2,1,0))
 # plot(BCO.dat$X1, C.full[,partition==1] %*% w.est.Gaus[partition==1],
@@ -285,16 +252,8 @@ est.gaus.mean = C.full %*% w.est.Gaus
 MSE.gaus = sqrt(mean((est.gaus.mean - mean.trend)^2))
 
 sel.model.Gaus = ifelse(est.model.Gaus < 0.5, 0, 1)[-1]
-sel.lin.Gaus = ifelse(apply(Z.samples.C[,keepers], 1, mean) < 0.5, 0, 1)[-1]
-sel.nlin.Gaus = ifelse(apply(Zeta.samples.C[,keepers], 1, mean) < 0.5, 0, 1)[-1]
 # sel.model.Gaus = HPPM.Est[-1]
 
-true.lin.ind = c( rep(c(0,1,1,1,1,0), 4), rep(0, 100 - 24))
-true.nlin.ind = c(rep(c(1,1,0,1,1,1), 4), rep(0, 100 - 24))
-FPl.Gaus = sum(true.lin.ind - sel.lin.Gaus == -1)
-FNl.Gaus = sum(true.lin.ind - sel.lin.Gaus == 1)
-FPn.Gaus = sum(true.nlin.ind - sel.nlin.Gaus == -1)
-FNn.Gaus = sum(true.nlin.ind - sel.nlin.Gaus == 1)
 FP.Gaus = sum(true.model.ind - sel.model.Gaus == -1)
 FN.Gaus = sum(true.model.ind - sel.model.Gaus == 1)
 
@@ -326,21 +285,16 @@ FN.Gaus = sum(true.model.ind - sel.model.Gaus == 1)
 
 ############################################################################
 ### spikeSlabGAM version
-BCO.dat$x.s = x.s
-BCO.dat$z.s = z.s
+
 options(mc.cores = 1)
 mcmc = list(nChains = 1, chainLength = n.samples-n.burnin, burnin = n.burnin, thin = thin, sampleY = FALSE)
-
-
-m = spikeSlabGAM(formula = as.formula(paste("Y.norm ~", 
-                                            paste(names(BCO.dat)[grep("X", names(BCO.dat))], 
-                                                  collapse = " + "),
-                                            "+ x.s + z.s + X1:x.s:z.s")),
+m = spikeSlabGAM(formula = Y.norm ~ X1 + X2 + X3 + X4 + X5 +
+                   X6 + X7 + X8 + X9 + X10 + X11 + X12,
                  data = BCO.dat,
                  mcmc = mcmc)
 
 which.selected = function(x){
-  marg.p = summary(x)$trmSummary[-1,1][-(201:212)]
+  marg.p = summary(x)$trmSummary[-1,1]
   marg.p.mat = matrix(marg.p, nrow = 2)
   did.select = ifelse(marg.p.mat < 0.5, 0, 1)
   did.sel.term = apply(did.select, 2, sum)
@@ -353,13 +307,6 @@ sel.model.SSG = which.selected(m)
 FP.SSG = sum(true.model.ind - sel.model.SSG == -1)
 FN.SSG = sum(true.model.ind - sel.model.SSG == 1)
 
-sel.lin.SSG = as.numeric(summary(m)$trmSummary[-1,1][-(201:212)][grep('lin',names(summary(m)$trmSummary[-1,1][-(201:212)]))] > .5)
-sel.nlin.SSG = as.numeric(summary(m)$trmSummary[-1,1][-(201:212)][grep('sm',names(summary(m)$trmSummary[-1,1][-(201:212)]))] > .5)
-FPl.SSG = sum(true.lin.ind - sel.lin.SSG == -1)
-FNl.SSG = sum(true.lin.ind - sel.lin.SSG == 1)
-FPn.SSG = sum(true.nlin.ind - sel.nlin.SSG == -1)
-FNn.SSG = sum(true.nlin.ind - sel.nlin.SSG == 1)
-
 Dbar.SSG = mean(-2*m$samples$logLik[[1]])
 Dhat.SSG = (-2*sum(dnorm(BCO.dat$Y.norm, mean=mny, sd=sqrt(m$postMeans$sigma2), log=TRUE)))
 pD.SSG = Dbar.SSG - Dhat.SSG
@@ -368,7 +315,7 @@ DIC.SSG = Dhat.SSG + 2*pD.SSG
 
 sel.terms = ifelse(summary(m)$trmSummary[-1,1] < 0.5, 0, 1)
 
-mny.terms = predict(m, type="terms")[-(201:212)]
+mny.terms = predict(m, type="terms")
 for(i in 1:(length(mny.terms)-1)){
   mny.terms[[i]] = mny.terms[[i]]*sel.terms[i]
 }
@@ -377,90 +324,83 @@ mny.sel = Reduce("+", mny.terms)
 # MSE.SSG = sqrt(mean((mny - mean.trend)^2))
 MSE.SSG = sqrt(mean((mny.sel - mean.trend)^2))
 
-# # ############################################################################
-# ### Marra version: Gaussian
-# ctrl = lmeControl(opt='optim')
-# fit.gam.dp = gamm(Y.norm ~ ti(X1, k=num.knots.sim) + ti(X2, k=num.knots.sim) + ti(X3, k=num.knots.sim) + ti(X4, k=num.knots.sim) +
-#                    ti(X5, k=num.knots.sim) + ti(X6, k=num.knots.sim) + ti(X7, k=num.knots.sim) + ti(X8, k=num.knots.sim) +
-#                    ti(X9, k=num.knots.sim) + ti(X10, k=num.knots.sim) + ti(X11, k=num.knots.sim) + ti(X12, k=num.knots.sim) +
-#                     te(x.s,z.s,X1,
-#                        k=c(25,10),
-#                        d=c(2,1),
-#                        bs=c("tp","cr")),
-#                  dat = BCO.dat, select = TRUE, method="REML", 
-#                  correlation = corAR1(form = ~ 1),
-#                  control = ctrl)
-# 
-# sel.model.Gaus.dp = ifelse(summary(fit.gam.dp$gam)$s.pv < 0.05, 1, 0)[-13]
-# FP.Gaus.dp = sum(true.model.ind - sel.model.Gaus.dp == -1)
-# FN.Gaus.dp = sum(true.model.ind - sel.model.Gaus.dp == 1)
-# 
-# est.terms = predict(fit.gam.dp$gam, type = "terms")
-# est.gaus.mean.dp = est.terms[,1:12]%*%sel.model.Gaus.dp + attr(est.terms, "constant")
-# MSE.gaus.dp = sqrt(mean((est.gaus.mean.dp - mean.trend)^2))
-# 
-# fit.gam.sh = gamm(Y.norm ~ ti(X1, k=num.knots.sim, bs="cs") + ti(X2, k=num.knots.sim, bs="cs") + ti(X3, k=num.knots.sim, bs="cs") + ti(X4, k=num.knots.sim, bs="cs") +
-#                    ti(X5, k=num.knots.sim, bs="cs") + ti(X6, k=num.knots.sim, bs="cs") + ti(X7, k=num.knots.sim, bs="cs") + ti(X8, k=num.knots.sim, bs="cs") +
-#                    ti(X9, k=num.knots.sim, bs="cs") + ti(X10, k=num.knots.sim, bs="cs") + ti(X11, k=num.knots.sim, bs="cs") + ti(X12, k=num.knots.sim, bs="cs") +
-#                     te(x.s,z.s,X1,
-#                        k=c(25,10),
-#                        d=c(2,1),
-#                        bs=c("tp","cr")),
-#                  dat = BCO.dat, select = FALSE, method="REML",
-#                  correlation = corAR1(form = ~ 1),
-#                  control = ctrl)
-# 
-# sel.model.Gaus.sh = ifelse(summary(fit.gam.sh$gam)$s.pv < 0.05, 1, 0)[-13]
-# FP.Gaus.sh = sum(true.model.ind - sel.model.Gaus.sh == -1)
-# FN.Gaus.sh = sum(true.model.ind - sel.model.Gaus.sh == 1)
-# 
-# est.terms.sh = predict(fit.gam.sh$gam, type = "terms")
-# est.gaus.mean.sh = est.terms.sh[,1:12]%*%sel.model.Gaus.sh + attr(est.terms.sh, "constant")
-# MSE.gaus.sh = sqrt(mean((est.gaus.mean.sh - mean.trend)^2))
-# 
-# #############################################################
+############################################################################
+### Marra version: Gaussian
+ctrl = lmeControl(opt='optim')
+
+fit.gam.dp = tryCatch(gamm(Y.norm ~ ti(X1, k=num.knots.sim) + ti(X2, k=num.knots.sim) + ti(X3, k=num.knots.sim) + ti(X4, k=num.knots.sim) +
+                             ti(X5, k=num.knots.sim) + ti(X6, k=num.knots.sim) + ti(X7, k=num.knots.sim) + ti(X8, k=num.knots.sim) +
+                             ti(X9, k=num.knots.sim) + ti(X10, k=num.knots.sim) + ti(X11, k=num.knots.sim) + ti(X12, k=num.knots.sim),
+                           dat = BCO.dat, select = TRUE, method="REML", 
+                           correlation = corARMA(form = ~ 1, p = 2),
+                           control = ctrl),
+                      error = function(e){
+                        gamm(Y.norm ~ ti(X1, k=num.knots.sim) + ti(X2, k=num.knots.sim) + ti(X3, k=num.knots.sim) + ti(X4, k=num.knots.sim) +
+                               ti(X5, k=num.knots.sim) + ti(X6, k=num.knots.sim) + ti(X7, k=num.knots.sim) + ti(X8, k=num.knots.sim) +
+                               ti(X9, k=num.knots.sim) + ti(X10, k=num.knots.sim) + ti(X11, k=num.knots.sim) + ti(X12, k=num.knots.sim),
+                             dat = BCO.dat, select = TRUE, method="REML", 
+                             correlation = corAR1(form = ~ 1),
+                             control = ctrl)
+                      })
+
+sel.model.Gaus.dp = ifelse(summary(fit.gam.dp$gam)$s.pv < 0.05, 1, 0)
+FP.Gaus.dp = sum(true.model.ind - sel.model.Gaus.dp == -1)
+FN.Gaus.dp = sum(true.model.ind - sel.model.Gaus.dp == 1)
+
+est.terms = predict(fit.gam.dp$gam, type = "terms")
+est.gaus.mean.dp = est.terms%*%sel.model.Gaus.dp + attr(est.terms, "constant")
+MSE.gaus.dp = sqrt(mean((est.gaus.mean.dp - mean.trend)^2))
+
+fit.gam.sh = tryCatch(gamm(Y.norm ~ ti(X1, k=num.knots.sim, bs="cs") + ti(X2, k=num.knots.sim, bs="cs") + ti(X3, k=num.knots.sim, bs="cs") + ti(X4, k=num.knots.sim, bs="cs") +
+                             ti(X5, k=num.knots.sim, bs="cs") + ti(X6, k=num.knots.sim, bs="cs") + ti(X7, k=num.knots.sim, bs="cs") + ti(X8, k=num.knots.sim, bs="cs") +
+                             ti(X9, k=num.knots.sim, bs="cs") + ti(X10, k=num.knots.sim, bs="cs") + ti(X11, k=num.knots.sim, bs="cs") + ti(X12, k=num.knots.sim, bs="cs"),
+                           dat = BCO.dat, select = FALSE, method="REML",
+                           correlation = corARMA(form = ~ 1, p = 2),
+                           control = ctrl),
+                      error = function(e){
+                        gamm(Y.norm ~ ti(X1, k=num.knots.sim, bs="cs") + ti(X2, k=num.knots.sim, bs="cs") + ti(X3, k=num.knots.sim, bs="cs") + ti(X4, k=num.knots.sim, bs="cs") +
+                               ti(X5, k=num.knots.sim, bs="cs") + ti(X6, k=num.knots.sim, bs="cs") + ti(X7, k=num.knots.sim, bs="cs") + ti(X8, k=num.knots.sim, bs="cs") +
+                               ti(X9, k=num.knots.sim, bs="cs") + ti(X10, k=num.knots.sim, bs="cs") + ti(X11, k=num.knots.sim, bs="cs") + ti(X12, k=num.knots.sim, bs="cs"),
+                             dat = BCO.dat, select = FALSE, method="REML",
+                             correlation = corAR1(form = ~ 1),
+                             control = ctrl)
+                      })
+
+sel.model.Gaus.sh = ifelse(summary(fit.gam.sh$gam)$s.pv < 0.05, 1, 0)
+FP.Gaus.sh = sum(true.model.ind - sel.model.Gaus.sh == -1)
+FN.Gaus.sh = sum(true.model.ind - sel.model.Gaus.sh == 1)
+
+est.terms.sh = predict(fit.gam.sh$gam, type = "terms")
+est.gaus.mean.sh = est.terms.sh%*%sel.model.Gaus.sh + attr(est.terms.sh, "constant")
+MSE.gaus.sh = sqrt(mean((est.gaus.mean.sh - mean.trend)^2))
+
+#############################################################
 
 
 #############################################################
 
 results_AA_BB_CC = data.frame("MSE" = c(MSE.gaus,
-                                        # MSE.gaus.sh,
-                                        # MSE.gaus.dp,
+                                        MSE.gaus.sh,
+                                        MSE.gaus.dp,
                                         MSE.SSG),
                               "FP" = c(FP.Gaus,
-                                       # FP.Gaus.sh,
-                                       # FP.Gaus.dp,
+                                       FP.Gaus.sh,
+                                       FP.Gaus.dp,
                                        FP.SSG),
                               "FN" = c(FN.Gaus,
-                                       # FN.Gaus.sh,
-                                       # FN.Gaus.dp,
+                                       FN.Gaus.sh,
+                                       FN.Gaus.dp,
                                        FN.SSG),
-                              "FPl" = c(FPl.Gaus,
-                                       # FP.Gaus.sh,
-                                       # FP.Gaus.dp,
-                                       FPl.SSG),
-                              "FNl" = c(FNl.Gaus,
-                                       # FN.Gaus.sh,
-                                       # FN.Gaus.dp,
-                                       FNl.SSG),
-                              "FPn" = c(FPn.Gaus,
-                                       # FP.Gaus.sh,
-                                       # FP.Gaus.dp,
-                                       FPn.SSG),
-                              "FNn" = c(FNn.Gaus,
-                                       # FN.Gaus.sh,
-                                       # FN.Gaus.dp,
-                                       FNn.SSG),
                               "DIC" = c(DIC.Gaus,
-                                        # NA,
-                                        # NA,
+                                        NA,
+                                        NA,
                                         DIC.SSG),
-                              "Method" = rep(c("Bayesian","SSGAM"),1),
-                              "SNR" = rep(as.character(SNR), 2),
-                              "SampleSize250*2^i-1" = rep(as.character(BB), 2))
+                              "Method" = rep(c("Bayesian","Shrinkage","Double Penalty","SSGAM"),1),
+                              "SNR" = rep(as.character(SNR), 4),
+                              "SampleSize250*2^i-1" = rep(as.character(BB), 4))
 results_AA_BB_CC
 
-M = "20171008_results_BGLGAM_STHD.csv"
+M = "20190217_results_BGLGAM_AR2.csv"
 does.M.exist = file.exists(M)
 if (!does.M.exist) file.create(M)
 write.table(results_AA_BB_CC, 

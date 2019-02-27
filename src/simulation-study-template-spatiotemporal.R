@@ -1,19 +1,3 @@
-############################################################
-##
-## This script implements a fully Bayesian version
-## of GAM model selection under ST dependence.
-##
-## Template for Hipergator.
-## AA - seed (100 replications for each)
-## BB - sample size (250, 500, 1000)
-## CC - SNR, takes values 1, 2, 3
-##
-## Hunter R. Merrill, 2017.03.30
-##
-## CORRELATED SIMULATION STUDY
-##
-#############################################################
-
 rm(list=ls())
 # AA = 1 #for HiperGator (AA = seed)
 # BB = 1 #BB = sample size
